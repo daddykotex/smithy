@@ -20,6 +20,7 @@ import software.amazon.smithy.cli.commands.AstCommand;
 import software.amazon.smithy.cli.commands.BuildCommand;
 import software.amazon.smithy.cli.commands.DiffCommand;
 import software.amazon.smithy.cli.commands.SelectCommand;
+import software.amazon.smithy.cli.commands.TransformAwsSdkModelsCommand;
 import software.amazon.smithy.cli.commands.ValidateCommand;
 
 /**
@@ -28,6 +29,7 @@ import software.amazon.smithy.cli.commands.ValidateCommand;
 public final class SmithyCli {
     public static final String DISCOVER = "--discover";
     public static final String DISCOVER_CLASSPATH = "--discover-classpath";
+    public static final String OUTPUT = "--output";
     public static final String ALLOW_UNKNOWN_TRAITS = "--allow-unknown-traits";
     public static final String SEVERITY = "--severity";
 
@@ -98,6 +100,7 @@ public final class SmithyCli {
         cli.addCommand(new DiffCommand());
         cli.addCommand(new SelectCommand());
         cli.addCommand(new AstCommand());
+        cli.addCommand(new TransformAwsSdkModelsCommand());
         cli.setConfigureLogging(configureLogging);
         return cli;
     }

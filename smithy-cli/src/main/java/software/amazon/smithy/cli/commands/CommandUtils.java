@@ -15,14 +15,17 @@
 
 package software.amazon.smithy.cli.commands;
 
+import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -42,6 +45,45 @@ final class CommandUtils {
     private static final Logger LOGGER = Logger.getLogger(CommandUtils.class.getName());
 
     private CommandUtils() {}
+
+    static Model buildModelForSingleFile(String model,
+                                         Arguments arguments,
+                                         ClassLoader classLoader,
+                                         Set<Validator.Feature> features) {
+        ModelAssembler assembler = CommandUtils.createModelAssembler(classLoader);
+
+        ContextualValidationEventFormatter formatter = new ContextualValidationEventFormatter();
+        boolean stdout = features.contains(Validator.Feature.STDOUT);
+        boolean quiet = features.contains(Validator.Feature.QUIET);
+        Consumer<String> writer = stdout ? Cli.getStdout() : Cli.getStderr();
+
+        // --severity defaults to NOTE.
+        Severity minSeverity = arguments.has(SmithyCli.SEVERITY)
+                ? parseSeverity(arguments.parameter(SmithyCli.SEVERITY))
+                : Severity.NOTE;
+
+        assembler.validationEventListener(event -> {
+            // Only log events that are >= --severity.
+            if (event.getSeverity().ordinal() >= minSeverity.ordinal()) {
+                if (event.getSeverity() == Severity.WARNING && !quiet) {
+                    // Only log warnings when not quiet
+                    Colors.YELLOW.write(writer, formatter.format(event) + System.lineSeparator());
+                } else if (event.getSeverity() == Severity.DANGER || event.getSeverity() == Severity.ERROR) {
+                    // Always output error and danger events, even when quiet.
+                    Colors.RED.write(writer, formatter.format(event) + System.lineSeparator());
+                } else if (!quiet) {
+                    writer.accept(formatter.format(event) + System.lineSeparator());
+                }
+            }
+        });
+
+        CommandUtils.handleModelDiscovery(arguments, assembler, classLoader);
+        CommandUtils.handleUnknownTraitsOption(arguments, assembler);
+        assembler.addImport(model);
+        ValidatedResult<Model> result = assembler.assemble();
+        Validator.validate(result, features);
+        return result.getResult().orElseThrow(() -> new RuntimeException("Expected Validator to throw"));
+    }
 
     static Model buildModel(Arguments arguments, ClassLoader classLoader, Set<Validator.Feature> features) {
         List<String> models = arguments.positionalArguments();
@@ -102,6 +144,25 @@ final class CommandUtils {
         } else if (arguments.has(SmithyCli.DISCOVER)) {
             assembler.discoverModels(baseLoader);
         }
+    }
+
+    public static Optional<Path> handleOutputDirectory(Arguments arguments) {
+        if (arguments.has(SmithyCli.OUTPUT)) {
+            String outputRelativePath = arguments.parameter(SmithyCli.OUTPUT);
+            Path outputDirPath = Path.of(outputRelativePath);
+            File outputDirFile = outputDirPath.toFile();
+            if (outputDirFile.exists()) {
+                if (!outputDirFile.isDirectory()) {
+                    throw new CliError("Output path is not a directory!");
+                }
+            } else {
+                if (!outputDirFile.mkdirs()) {
+                    throw new CliError("Cannot create output directory!");
+                }
+            }
+            return Optional.of(outputDirPath);
+        }
+        return Optional.empty();
     }
 
     private static void discoverModelsWithClasspath(Arguments arguments, ModelAssembler assembler) {
