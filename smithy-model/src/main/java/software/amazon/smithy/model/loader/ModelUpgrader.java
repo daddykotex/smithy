@@ -158,16 +158,6 @@ final class ModelUpgrader {
         if (REMOVED_PRIMITIVE_SHAPES.containsKey(member.getTarget())) {
             emitWhenTargetingRemovedPreludeShape(Severity.ERROR, member);
         }
-
-        if (member.hasTrait(BoxTrait.class)) {
-            events.add(ValidationEvent.builder()
-                               .id(UPGRADE_MODEL)
-                               .severity(Severity.ERROR)
-                               .shape(member)
-                               .sourceLocation(member.expectTrait(BoxTrait.class))
-                               .message("@box is not supported in Smithy IDL 2.0")
-                               .build());
-        }
     }
 
     private void emitWhenTargetingRemovedPreludeShape(Severity severity, MemberShape member) {
